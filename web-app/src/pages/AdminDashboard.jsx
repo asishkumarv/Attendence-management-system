@@ -135,37 +135,98 @@ const AdminDashboard = () => {
       {activeTab === 'stats' && (
         <div>
           <h3>Company Stats</h3>
-          <div className="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Employee</th>
-                  <th>Login Time</th>
-                  <th>Logoff Time</th>
-                  <th>Total Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.map(s => (
-                  <tr key={s.id}>
-                    <td>{s.loginTime ? new Date(s.loginTime).toLocaleDateString() : new Date(s.date).toLocaleDateString()}</td>
-                    <td>{s.user?.name || 'Unknown'}</td>
-                    <td>{s.loginTime ? new Date(s.loginTime).toLocaleTimeString() : '-'}</td>
-                    <td>
-                      {s.logoffTime ? new Date(s.logoffTime).toLocaleTimeString() : (
-                        <span className="status-tag" style={{ background: s.autoLoggedOff ? '#fff1f0' : '#e6f4ff', borderColor: s.autoLoggedOff ? '#ffa39e' : '#91caff', color: s.autoLoggedOff ? '#cf1322' : '#0958d9' }}>
-                          {s.autoLoggedOff ? 'Auto-off' : 'Active'}
-                        </span>
-                      )}
-                    </td>
-                    <td>{s.totalWorkingMinutes ? (s.totalWorkingMinutes / 60).toFixed(2) + 'h' : '-'}</td>
-                  </tr>
-                ))}
-                {stats.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No stats available.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+          
+          {(() => {
+            const calculateRecordStats = (record) => {
+              if (!record.loginTime) return { workMins: 0, breakMins: 0 };
+              const login = new Date(record.loginTime);
+              const logoff = record.logoffTime ? new Date(record.logoffTime) : new Date();
+              let breakMins = 0;
+              if (record.breaks) {
+                record.breaks.forEach(b => {
+                  const bStart = new Date(b.breakStartTime);
+                  const bEnd = b.breakEndTime ? new Date(b.breakEndTime) : new Date();
+                  breakMins += Math.floor((bEnd - bStart) / 60000);
+                });
+              }
+              const totalMins = Math.floor((logoff - login) / 60000);
+              return { workMins: Math.max(0, totalMins - breakMins), breakMins };
+            };
+
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+
+            const employeeMonthlyStats = {};
+            stats.forEach(s => {
+              const d = s.loginTime ? new Date(s.loginTime) : new Date(s.date);
+              if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                const empName = s.user?.name || 'Unknown';
+                if (!employeeMonthlyStats[empName]) employeeMonthlyStats[empName] = { workMins: 0, breakMins: 0 };
+                const { workMins, breakMins } = calculateRecordStats(s);
+                employeeMonthlyStats[empName].workMins += workMins;
+                employeeMonthlyStats[empName].breakMins += breakMins;
+              }
+            });
+
+            const formatHours = (mins) => (mins / 60).toFixed(2) + 'h';
+
+            return (
+              <>
+                <h4 style={{ marginBottom: '12px' }}>Current Month Totals by Employee</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+                  {Object.keys(employeeMonthlyStats).length === 0 ? (
+                    <p style={{ color: 'var(--text-secondary)' }}>No records this month.</p>
+                  ) : (
+                    Object.entries(employeeMonthlyStats).map(([empName, mStats]) => (
+                      <div key={empName} className="card" style={{ flex: '1 1 200px', padding: '16px', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                        <p style={{ margin: 0, fontWeight: 'bold' }}>{empName}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Work: <strong style={{ color: 'var(--accent)' }}>{formatHours(mStats.workMins)}</strong></span>
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Break: <strong style={{ color: '#d97706' }}>{formatHours(mStats.breakMins)}</strong></span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <h4 style={{ marginBottom: '12px' }}>Daily Records</h4>
+                <div className="table-responsive">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Employee</th>
+                        <th>Login Time</th>
+                        <th>Logoff Time</th>
+                        <th>Work Hours</th>
+                        <th>Break Hours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.map(s => {
+                        const { workMins, breakMins } = calculateRecordStats(s);
+                        return (
+                          <tr key={s.id}>
+                            <td>{s.loginTime ? new Date(s.loginTime).toLocaleDateString() : new Date(s.date).toLocaleDateString()}</td>
+                            <td>{s.user?.name || 'Unknown'}</td>
+                            <td>{s.loginTime ? new Date(s.loginTime).toLocaleTimeString() : '-'}</td>
+                            <td>
+                              {s.logoffTime ? new Date(s.logoffTime).toLocaleTimeString() : (
+                                <span className="status-tag" style={{ background: '#e6f4ff', borderColor: '#91caff', color: '#0958d9' }}>Active</span>
+                              )}
+                            </td>
+                            <td>{formatHours(workMins)}</td>
+                            <td>{formatHours(breakMins)}</td>
+                          </tr>
+                        )
+                      })}
+                      {stats.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No stats available.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 

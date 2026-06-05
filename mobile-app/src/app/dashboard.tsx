@@ -7,8 +7,8 @@ const API_BASE = 'http://192.168.0.8:5000/api';
 
 export default function DashboardScreen() {
   const { token } = useLocalSearchParams();
-  const [stats, setStats] = useState([]);
-  const [holidays, setHolidays] = useState([]);
+  const [stats, setStats] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,25 +47,100 @@ export default function DashboardScreen() {
         <Text style={styles.title}>Dashboard</Text>
         <TouchableOpacity 
           style={styles.terminalButton} 
-          onPress={() => router.push({ pathname: '/terminal', params: { token } })}
+          onPress={() => {
+            const today = new Date().toDateString();
+            const todayRecord = stats.find((s: any) => {
+              const recordDate = s.loginTime ? new Date(s.loginTime).toDateString() : new Date(s.date).toDateString();
+              return recordDate === today;
+            });
+            const hasClockedIn = !!todayRecord?.loginTime;
+            const hasClockedOut = !!todayRecord?.logoffTime;
+            const isOnBreak = todayRecord?.breaks?.some((b: any) => !b.breakEndTime);
+
+            router.push({ 
+              pathname: '/terminal', 
+              params: { 
+                token, 
+                hasClockedIn: hasClockedIn ? 'true' : 'false',
+                hasClockedOut: hasClockedOut ? 'true' : 'false',
+                isOnBreak: isOnBreak ? 'true' : 'false'
+              } 
+            });
+          }}
         >
           <Text style={styles.terminalButtonText}>Open Terminal</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>My Stats</Text>
-      {stats.length === 0 ? (
-        <Text style={styles.emptyText}>No attendance records found.</Text>
-      ) : (
-        stats.map((s: any) => (
-          <View key={s.id} style={styles.card}>
-            <Text style={styles.cardText}>Date: {s.loginTime ? new Date(s.loginTime).toLocaleDateString() : new Date(s.date).toLocaleDateString()}</Text>
-            <Text style={styles.cardText}>In: {s.loginTime ? new Date(s.loginTime).toLocaleTimeString() : '-'}</Text>
-            <Text style={styles.cardText}>Out: {s.logoffTime ? new Date(s.logoffTime).toLocaleTimeString() : '-'}</Text>
-            <Text style={styles.cardText}>Hours: {s.totalWorkingMinutes ? (s.totalWorkingMinutes / 60).toFixed(2) : '-'}</Text>
-          </View>
-        ))
-      )}
+      {(() => {
+        const calculateRecordStats = (record: any) => {
+          if (!record.loginTime) return { workMins: 0, breakMins: 0 };
+          const login = new Date(record.loginTime).getTime();
+          const logoff = record.logoffTime ? new Date(record.logoffTime).getTime() : new Date().getTime();
+          let breakMins = 0;
+          if (record.breaks) {
+            record.breaks.forEach((b: any) => {
+              const bStart = new Date(b.breakStartTime).getTime();
+              const bEnd = b.breakEndTime ? new Date(b.breakEndTime).getTime() : new Date().getTime();
+              breakMins += Math.floor((bEnd - bStart) / 60000);
+            });
+          }
+          const totalMins = Math.floor((logoff - login) / 60000);
+          return { workMins: Math.max(0, totalMins - breakMins), breakMins };
+        };
+
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        let monthlyWorkMins = 0;
+        let monthlyBreakMins = 0;
+
+        stats.forEach((s: any) => {
+          const d = s.loginTime ? new Date(s.loginTime) : new Date(s.date);
+          if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+            const { workMins, breakMins } = calculateRecordStats(s);
+            monthlyWorkMins += workMins;
+            monthlyBreakMins += breakMins;
+          }
+        });
+
+        const formatHours = (mins: number) => (mins / 60).toFixed(2) + 'h';
+
+        return (
+          <>
+            <Text style={styles.sectionTitle}>This Month</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <View style={[styles.card, { flex: 1, alignItems: 'center' }]}>
+                <Text style={{ color: '#9ca3af', fontSize: 12 }}>Work Hours</Text>
+                <Text style={{ color: '#3b82f6', fontSize: 24, fontWeight: 'bold' }}>{formatHours(monthlyWorkMins)}</Text>
+              </View>
+              <View style={[styles.card, { flex: 1, alignItems: 'center' }]}>
+                <Text style={{ color: '#9ca3af', fontSize: 12 }}>Break Hours</Text>
+                <Text style={{ color: '#f59e0b', fontSize: 24, fontWeight: 'bold' }}>{formatHours(monthlyBreakMins)}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.sectionTitle}>Daily Records</Text>
+            {stats.length === 0 ? (
+              <Text style={styles.emptyText}>No attendance records found.</Text>
+            ) : (
+              stats.map((s: any) => {
+                const { workMins, breakMins } = calculateRecordStats(s);
+                return (
+                  <View key={s.id} style={styles.card}>
+                    <Text style={styles.cardText}>Date: {s.loginTime ? new Date(s.loginTime).toLocaleDateString() : new Date(s.date).toLocaleDateString()}</Text>
+                    <Text style={styles.cardText}>In: {s.loginTime ? new Date(s.loginTime).toLocaleTimeString() : '-'}</Text>
+                    <Text style={styles.cardText}>Out: {s.logoffTime ? new Date(s.logoffTime).toLocaleTimeString() : (s.loginTime ? 'Active' : '-')}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 8 }}>
+                      <Text style={{ color: '#3b82f6', fontWeight: 'bold' }}>Work: {formatHours(workMins)}</Text>
+                      <Text style={{ color: '#f59e0b', fontWeight: 'bold' }}>Break: {formatHours(breakMins)}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </>
+        );
+      })()}
 
       <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Upcoming Holidays</Text>
       {holidays.length === 0 ? (

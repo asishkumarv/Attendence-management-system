@@ -158,7 +158,7 @@ router.delete('/admin/holidays/:id', isAdmin, async (req, res) => {
 router.get('/admin/stats', isAdmin, async (req, res) => {
   try {
     let attendances: any[] = await prisma.attendance.findMany({
-      include: { user: { select: { name: true, email: true } } },
+      include: { user: { select: { name: true, email: true } }, breaks: true },
       orderBy: { date: 'desc' }
     });
     attendances = attendances.map(a => {
@@ -167,7 +167,12 @@ router.get('/admin/stats', isAdmin, async (req, res) => {
       return {
         ...a,
         loginTime: realLoginTime,
-        logoffTime: realLogoffTime
+        logoffTime: realLogoffTime,
+        breaks: a.breaks ? a.breaks.map((b: any) => ({
+          ...b,
+          breakStartTime: fromDbTime(b.breakStartTime),
+          breakEndTime: fromDbTime(b.breakEndTime)
+        })) : []
       };
     });
     res.json(attendances);
@@ -187,7 +192,8 @@ router.get('/employee/stats', verifyToken, async (req: AuthRequest, res) => {
     const userId = req.user!.id;
     let stats: any[] = await prisma.attendance.findMany({
       where: { userId },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      include: { breaks: true }
     });
     stats = stats.map(a => {
       const realLoginTime = fromDbTime(a.loginTime) as Date;
@@ -195,7 +201,12 @@ router.get('/employee/stats', verifyToken, async (req: AuthRequest, res) => {
       return {
         ...a,
         loginTime: realLoginTime,
-        logoffTime: realLogoffTime
+        logoffTime: realLogoffTime,
+        breaks: a.breaks ? a.breaks.map((b: any) => ({
+          ...b,
+          breakStartTime: fromDbTime(b.breakStartTime),
+          breakEndTime: fromDbTime(b.breakEndTime)
+        })) : []
       };
     });
     res.json(stats);
@@ -333,7 +344,12 @@ router.post('/employee/terminal/break-in', verifyToken, async (req: AuthRequest,
 
     if (activeBreak) return res.status(400).json({ error: 'You are already on a break' });
 
-    const newBreak = await prisma.break.create({ data: { attendanceId: attendance.id } });
+    const newBreak = await prisma.break.create({ 
+      data: { 
+        attendanceId: attendance.id,
+        breakStartTime: toDbTime()
+      } 
+    });
 
     res.json({ message: 'Break started', break: newBreak });
   } catch (error) {
@@ -361,7 +377,7 @@ router.post('/employee/terminal/break-out', verifyToken, async (req: AuthRequest
 
     const updatedBreak = await prisma.break.update({
       where: { id: activeBreak.id },
-      data: { breakEndTime: new Date() }
+      data: { breakEndTime: toDbTime() }
     });
 
     res.json({ message: 'Break ended', break: updatedBreak });

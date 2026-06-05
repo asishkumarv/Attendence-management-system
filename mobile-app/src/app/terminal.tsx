@@ -7,7 +7,10 @@ import { useLocalSearchParams, router } from 'expo-router';
 const API_BASE = 'http://192.168.0.8:5000/api';
 
 export default function TerminalScreen() {
-  const { token } = useLocalSearchParams();
+  const { token, hasClockedIn, hasClockedOut, isOnBreak } = useLocalSearchParams();
+  const isClockedIn = hasClockedIn === 'true';
+  const isClockedOut = hasClockedOut === 'true';
+  const isBreak = isOnBreak === 'true';
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [status, setStatus] = useState('');
@@ -89,22 +92,32 @@ export default function TerminalScreen() {
       ) : (
         <>
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={[styles.button, styles.btnSuccess]} onPress={() => handleAction('login')}>
-              <Text style={styles.btnText}>Clock In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.btnDanger]} onPress={() => handleAction('logoff')}>
-              <Text style={styles.btnText}>Clock Out</Text>
-            </TouchableOpacity>
+            {!isClockedIn && (
+              <TouchableOpacity style={[styles.button, styles.btnSuccess]} onPress={() => handleAction('login')}>
+                <Text style={styles.btnText}>Clock In</Text>
+              </TouchableOpacity>
+            )}
+            {(isClockedIn && !isClockedOut) && (
+              <TouchableOpacity style={[styles.button, styles.btnDanger]} onPress={() => handleAction('logoff')}>
+                <Text style={styles.btnText}>Clock Out</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.button} onPress={() => handleAction('break-in')}>
-              <Text style={styles.btnText}>Break In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={() => handleAction('break-out')}>
-              <Text style={styles.btnText}>Break Out</Text>
-            </TouchableOpacity>
-          </View>
+          {(isClockedIn && !isClockedOut) && (
+            <View style={styles.buttonRow}>
+              {!isBreak && (
+                <TouchableOpacity style={styles.button} onPress={() => handleAction('break-in')}>
+                  <Text style={styles.btnText}>Break In</Text>
+                </TouchableOpacity>
+              )}
+              {isBreak && (
+                <TouchableOpacity style={styles.button} onPress={() => handleAction('break-out')}>
+                  <Text style={styles.btnText}>Break Out</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </>
       )}
     </View>
