@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            Int          @id @default(autoincrement())
+  name          String
+  email         String       @unique
+  password      String?
+  role          Role         @default(EMPLOYEE)
+  status        Status       @default(PENDING)
+  face_encoding String?      // Stored as JSON string or a comma separated array depending on size
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  attendances   Attendance[]
+}
+
+model Attendance {
+  id                  Int       @id @default(autoincrement())
+  userId              Int
+  date                String
+  loginTime           DateTime?
+  logoffTime          DateTime?
+  totalWorkingMinutes Int       @default(0)
+  autoLoggedOff       Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User      @relation(fields: [userId], references: [id])
+  breaks              Break[]
+
+  @@unique([userId, date])
+}
+
+model Break {
+  id              Int        @id @default(autoincrement())
+  attendanceId    Int
+  breakStartTime  DateTime   @default(now())
+  breakEndTime    DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  attendance      Attendance @relation(fields: [attendanceId], references: [id])
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  date        String    @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum Status {
+  PENDING
+  APPROVED
+  REJECTED
+}

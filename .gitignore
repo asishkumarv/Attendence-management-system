@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+build/
+.next/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.log
+coverage/
+.vscode/
